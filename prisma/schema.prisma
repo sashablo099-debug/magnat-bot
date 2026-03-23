@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id                   String     @id // Bitrix24 ID
+  chatId               String     @unique // Wazzup Chat ID
+  status               String     // NEW, IN_PROCESS, WAITING_FOR_CLIENT, FOLLOWUP_PENDING, FOLLOWUP_SENT
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  messages             Message[]
+  followUps            FollowUp[]
+}
+
+model Message {
+  id        String   @id // Wazzup messageId for idempotency
+  chatId    String
+  leadId    String?
+  sender    String   // 'manager' or 'client'
+  text      String
+  timestamp DateTime
+  lead      Lead?    @relation(fields: [leadId], references: [id])
+}
+
+model FollowUp {
+  id                   String   @id @default(uuid())
+  leadId               String
+  scheduledAt          DateTime
+  status               String   // 'pending', 'sent', 'cancelled'
+  language             String?
+  templateGroup        String?
+  attempts             Int      @default(0)
+  lastManagerMessageAt DateTime?
+  lastClientMessageAt  DateTime?
+  aiReasonCode         String?
+  lead                 Lead     @relation(fields: [leadId], references: [id])
+}

@@ -1,0 +1,35 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "build": "npx prisma generate && npm run build:frontend",
+    "start": "npx tsx src/index.ts",
+    "dev": "npx tsx watch src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/static": "^9.0.0",
+    "@prisma/client": "^6.19.2",
+    "axios": "^1.13.6",
+    "bullmq": "^5.71.0",
+    "dotenv": "^17.3.1",
+    "fastify": "^5.8.2",
+    "ioredis": "^5.10.1",
+    "openai": "^6.32.0",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "prisma": "^6.19.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
