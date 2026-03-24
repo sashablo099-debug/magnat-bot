@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clock, Send, XCircle, Search, RefreshCw, AlertCircle, MessageCircle, X, Trash2, Settings as SettingsIcon, Save } from 'lucide-react';
+import { Search, AlertCircle, X, Trash2, Settings as SettingsIcon, Save } from 'lucide-react';
 import './index.css';
 
 interface FollowUp {
