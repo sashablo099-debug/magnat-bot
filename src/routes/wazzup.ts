@@ -121,10 +121,15 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
               fastify.log.info(`[LIMIT] Follow-up already sent for lead ${lead.id}. Rule: ONLY 1 REMINDER EVER.`);
             } else {
               // Менеджер може уточнювати інфу, тому ми ОБНУЛЯЄМО таймер при кожному новому повідомленні.
-              // AI запрацює лише тоді, коли менеджер помовчить рівно 10 хвилин.
+              // AI запрацює лише тоді, коли менеджер помовчить рівно 15 хвилин.
               const jobId = `evaluate_debounce_${lead.id}`;
               const job = await followUpQueue.getJob(jobId);
-              if (job) await job.remove(); // Видаляємо попереднє завдання, щоб почати відлік наново
+              if (job) {
+                fastify.log.info(`[DEBUG] Resetting debounce timer for lead ${lead.id} to 15 minutes.`);
+                await job.remove(); 
+              } else {
+                fastify.log.info(`[DEBUG] Starting 15-minute debounce timer for lead ${lead.id}.`);
+              }
               
               await followUpQueue.add(
                 'evaluate-followup',
@@ -136,7 +141,7 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
                 },
                 {
                   jobId,
-                  delay: 10 * 60000 
+                  delay: 15 * 60000 
                 }
               );
             }
