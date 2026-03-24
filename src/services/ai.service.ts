@@ -12,7 +12,7 @@ export interface AIDecisionInput {
 
 export interface AIDecisionOutput {
   send_followup: boolean;
-  reason_code: 'GREETING_ONLY' | 'NO_QUESTION' | 'CLIENT_CLOSED' | 'VALID_FOLLOWUP' | 'NO_ENGAGEMENT';
+  reason_code: 'GREETING_ONLY' | 'NO_QUESTION' | 'CLIENT_CLOSED' | 'VALID_FOLLOWUP' | 'NO_ENGAGEMENT' | 'CLIENT_STILL_DECIDING' | 'CLIENT_REJECTED';
   waiting_for_client: boolean;
   language: 'ru' | 'ua' | 'en';
   engagement_level: 'low' | 'medium' | 'high';
@@ -28,20 +28,49 @@ export class AIService {
         .map((msg) => `[${msg.timestamp.toISOString()}] ${msg.sender.toUpperCase()}: ${msg.text}`)
         .join('\n');
 
-      const systemPrompt = `You are a strict, intelligent sales assistant decision engine for a jewelry store on Instagram.
-You analyze the conversation history to decide if and when to send a follow-up message.
-Avoid spam. Do not send if the manager just said thank you, conversation ended politely, client said they will contact later, or there is no real engagement.
+      const systemPrompt = `You are a decision engine for a LUXURY JEWELRY store's Instagram sales automation.
+Your goal is to protect warm leads from being lost — but also to never annoy clients who have clearly closed the conversation.
 
-- Your core function is to schedule a check exactly 15 minutes AFTER the manager's last message.
-- If the manager JUST replied (less than 15 minutes ago), you MUST NOT send immediately. Output "timing_decision": "delay_more" and "delay_minutes": 15.
-- IMPORTANT: Even if some time has already passed, you should still return "delay_minutes": 15 to ensure a 15-min gap from the moment you are evaluating.
-- Output "timing_decision": "send_now" ONLY if at least 15-20 minutes have ALREADY passed since the manager's last message and the client still hasn't replied.
-- Output "timing_decision": "cancel" if no follow-up is needed at all.
+=== THE CORE QUESTION TO ASK ===
+"Is this client still potentially interested in buying, even if they haven't committed yet?"
 
-Return STRICT JSON with the following structure:
+=== WHEN TO SEND A FOLLOW-UP (any of these = send) ===
+✓ Manager asked a question or made an offer, and client NEVER responded
+✓ Client said ambiguous things like:
+  - "I'm comparing prices" / "пока сравниваю цены" / "порівнюю ціни"
+  - "I'll think about it" / "подумаю" / "буду думати"
+  - "Maybe later" / "возможно позже" / "можливо пізніше"
+  - "Thank you, I'll contact you" / "спасибо, я свяжусь"
+  - "Interesting, but I need to think"
+  These people are WARM LEADS. They need a gentle follow-up.
+  → send_followup: true, reason_code: "CLIENT_STILL_DECIDING"
+
+=== WHEN TO CANCEL (do NOT send a follow-up) ===
+✗ Client explicitly said they are NOT interested:
+  - "Not interested" / "не интересно" / "не цікаво"
+  - "Too expensive, no thanks" / "дорого, откажусь"
+  - "I bought elsewhere" / "купил в другом месте"
+  - "Goodbye" with finality / "до свидания, спасибо, но нет"
+✗ Conversation ended with a purchase or booking confirmed
+✗ Manager only sent a greeting with no real sales content
+✗ Client is clearly NOT in the target market (just curious, no buying signal)
+
+=== TIMING RULES ===
+- If less than 15 minutes passed since manager's last message → timing_decision: "delay_more", delay_minutes: 15
+- If the conversation warrants a follow-up AND enough time has passed → timing_decision: "send_now"
+- If no follow-up is needed → timing_decision: "cancel"
+
+=== TEMPLATE CHOICE ===
+- Template A: Simple re-engagement ("Are you still interested?") — for cold/no-response
+- Template B: Offer help / alternatives — for "comparing prices" / "thinking about it" clients
+
+=== LANGUAGE ===
+Detect the language the CLIENT used most. Output: "ru", "ua", or "en".
+
+Return STRICT JSON only:
 {
   "send_followup": true/false,
-  "reason_code": "GREETING_ONLY" | "NO_QUESTION" | "CLIENT_CLOSED" | "VALID_FOLLOWUP" | "NO_ENGAGEMENT",
+  "reason_code": "GREETING_ONLY" | "NO_QUESTION" | "CLIENT_CLOSED" | "VALID_FOLLOWUP" | "NO_ENGAGEMENT" | "CLIENT_STILL_DECIDING" | "CLIENT_REJECTED",
   "waiting_for_client": true/false,
   "language": "ru" | "ua" | "en",
   "engagement_level": "low" | "medium" | "high",
@@ -50,12 +79,15 @@ Return STRICT JSON with the following structure:
   "template_group": "A" | "B"
 }`;
 
-      const userPrompt = `Input context:
-- Current Lead Status: ${input.currentLeadStatus}
-- Time passed since trigger: ${input.timePassedMinutes} minutes
+      const userPrompt = `Analyze this luxury jewelry store Instagram conversation.
+
+Context:
+- Time passed since manager's last message: ${input.timePassedMinutes} minutes
 - Last Manager Message At: ${input.lastManagerMessageTimestamp.toISOString()}
 
-Chat History (Last 50 messages):
+Read the FULL conversation carefully. Identify the client's TRUE intent — are they still potentially interested? Or have they firmly closed the door?
+
+Full Chat History:
 ${historyText}`;
 
       const response = await openai.chat.completions.create({
@@ -71,7 +103,9 @@ ${historyText}`;
       const content = response.choices[0].message.content;
       if (!content) return null;
 
-      return JSON.parse(content) as AIDecisionOutput;
+      const result = JSON.parse(content) as AIDecisionOutput;
+      console.log(`[AI] reason=${result.reason_code}, timing=${result.timing_decision}, send=${result.send_followup}, lang=${result.language}`);
+      return result;
     } catch (error) {
       console.error('Error evaluating AI decision:', error);
       return null;

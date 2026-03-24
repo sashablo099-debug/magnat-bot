@@ -80,24 +80,7 @@ export const followUpWorker = new Worker(
       } else if (decision.timing_decision === 'send_now' && decision.send_followup) {
         
         // ============================================================
-        // ЗАЛІЗНИЙ ЗАХИСТ №1: Хто написав ОСТАННІЙ?
-        // Якщо клієнт відповів поки ми "спали" — НЕ відправляємо
-        // ============================================================
-        const lastMessage = await prisma.message.findFirst({
-          where: { chatId },
-          orderBy: { timestamp: 'desc' },
-        });
-        if (lastMessage?.sender === 'client') {
-          console.log(`[GUARD] Last message is from CLIENT for lead ${leadId}. Aborting followup.`);
-          await prisma.followUp.create({
-            data: { leadId, scheduledAt: new Date(), status: 'cancelled', aiReasonCode: 'CLIENT_REPLIED_LAST' }
-          });
-          await prisma.lead.update({ where: { id: leadId }, data: { status: 'WAITING_FOR_CLIENT' } });
-          return;
-        }
-
-        // ============================================================
-        // ЗАЛІЗНИЙ ЗАХИСТ №2: Перевірка статусу в Bitrix CRM
+        // ФІНАЛЬНИЙ ЗАХИСТ: Перевірка статусу IN_PROCESS в Bitrix CRM
         // ============================================================
         try {
           const bitrixLead = await BitrixService.findLeadByInstagram(chatId);
