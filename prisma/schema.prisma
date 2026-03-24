@@ -40,3 +40,9 @@ model FollowUp {
   aiReasonCode         String?
   lead                 Lead     @relation(fields: [leadId], references: [id])
 }
+
+model Settings {
+  key   String @id
+  value String
+}
+

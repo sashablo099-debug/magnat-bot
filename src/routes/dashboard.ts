@@ -53,18 +53,30 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
 
   // DELETE a Lead and all its traces for easy testing
   fastify.delete('/leads/:id', async (request, reply) => {
+    // ... existing lead deletion code ...
     const { id } = request.params as { id: string };
     try {
-      // 1. Delete Messages
       await prisma.message.deleteMany({ where: { leadId: id } });
-      // 2. Delete FollowUps
       await prisma.followUp.deleteMany({ where: { leadId: id } });
-      // 3. Delete Lead
       await prisma.lead.delete({ where: { id } });
-      return { status: 'success', message: 'Lead deleted permanently!' };
-    } catch (error: any) {
-      fastify.log.error(error, "Error deleting lead");
-      return reply.code(500).send({ error: error.message || 'Error deleting lead' });
+      return { status: 'success' };
+    } catch (e) {
+      return reply.code(500).send({ error: 'Failed to delete' });
     }
   });
+
+  // SETTINGS API
+  fastify.get('/settings', async () => {
+    return await prisma.settings.findMany();
+  });
+
+  fastify.post('/settings', async (request) => {
+    const { key, value } = request.body as { key: string; value: string };
+    return await prisma.settings.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value }
+    });
+  });
 }
+

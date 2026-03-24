@@ -5,8 +5,8 @@ import { AIService, AIDecisionInput } from '../services/ai.service';
 import { WazzupService } from '../services/wazzup.service';
 import { BitrixService } from '../services/bitrix.service';
 import { followUpQueue } from '../config/queue';
+import { ConfigService } from '../services/config.service';
 
-// Template dictionary (MVP)
 const templates: Record<string, Record<string, string>> = {
   A: {
     ru: "Здравствуйте. Скажите, пожалуйста, Вам актуален вопрос по украшениям?",
@@ -26,7 +26,6 @@ export const followUpWorker = new Worker(
     if (job.name === 'evaluate-followup') {
       const { leadId, chatId } = job.data;
 
-      // 1. Gather Context
       const lead = await prisma.lead.findUnique({ where: { id: leadId } });
       if (!lead) return;
 
@@ -37,13 +36,10 @@ export const followUpWorker = new Worker(
       });
 
       const reversedMessages = messages.reverse();
-
       const lastManagerMsg = reversedMessages.slice().reverse().find((m) => m.sender === 'manager');
       const lastManagerTimestamp = lastManagerMsg ? lastManagerMsg.timestamp : lead.createdAt;
-
       const timePassedMinutes = Math.floor((new Date().getTime() - lastManagerTimestamp.getTime()) / 60000);
 
-      // 2. Call AI Service
       const aiInput: AIDecisionInput = {
         conversationHistory: reversedMessages.map((m) => ({ sender: m.sender, text: m.text, timestamp: m.timestamp })),
         lastManagerMessageTimestamp: lastManagerTimestamp,
@@ -54,20 +50,14 @@ export const followUpWorker = new Worker(
       const decision = await AIService.evaluateFollowUp(aiInput);
       if (!decision) throw new Error('AI Evaluation failed');
 
-      console.log(`[AI DECISION for ${chatId}]:`, decision);
-
-      // 3. Handle Decision
-      // ОЧИЩЕННЯ: прибираємо старі очікуючі повідомлення для цього чату, щоб не було дублікатів
       await prisma.followUp.updateMany({
         where: { leadId, status: 'pending' },
         data: { status: 'cancelled', aiReasonCode: 'SUPERSEDED' }
       });
 
       if (decision.timing_decision === 'delay_more') {
-        // Schedule next evaluation
-        // ЖОРСТКО ВСТАНОВЛЮЄМО 15 ХВИЛИН (ігноруємо AI, якщо він раптом каже менше)
-        const FIXED_DELAY_MINUTES = 15;
-        const delayMs = FIXED_DELAY_MINUTES * 60000;
+        const delayMinutes = await ConfigService.getInt('followup_delay_minutes', 15);
+        const delayMs = delayMinutes * 60000;
         
         await followUpQueue.add(
           'evaluate-followup',
@@ -75,7 +65,6 @@ export const followUpWorker = new Worker(
           { delay: delayMs }
         );
 
-        // Record in dashboard 
         await prisma.followUp.create({
           data: {
             leadId,
@@ -87,41 +76,30 @@ export const followUpWorker = new Worker(
           }
         });
 
-        // Update lead status
         await prisma.lead.update({ where: { id: leadId }, data: { status: 'FOLLOWUP_PENDING' } });
       } else if (decision.timing_decision === 'send_now' && decision.send_followup) {
         
-        // --- 🔒 CRM CHECK BEFORE SENDING ---
         try {
           const bitrixLead = await BitrixService.findLeadByInstagram(chatId);
-          
-          // ТЕПЕР ЖОРСТКА ПЕРЕВІРКА: Лід ПОВИНЕН бути в CRM, і його статус ПОВИНЕН бути IN_PROCESS
           if (!bitrixLead || bitrixLead.statusId !== 'IN_PROCESS') {
-            const blockReason = !bitrixLead ? 'CRM_NOT_FOUND' : `CRM_BLOCKED_${bitrixLead.statusId}`;
-            console.log(`[CRM BLOCK] Lead ${chatId}: ${blockReason}. Sending aborted!`);
-            
             await prisma.followUp.create({
               data: {
                 leadId,
                 scheduledAt: new Date(),
                 status: 'cancelled',
-                aiReasonCode: blockReason,
+                aiReasonCode: !bitrixLead ? 'CRM_NOT_FOUND' : `CRM_BLOCKED_${bitrixLead.statusId}`,
               }
             });
-            return; // Завершуємо виконання, лист гарантовано не відправляється!
+            return;
           }
         } catch(e) {
-          console.error('Error verifying Bitrix status before sending:', e);
-          return; // Якщо CRM впала, теж не ризикуємо відправляти
+          console.error('CRM check failed', e);
+          return;
         }
-        // -----------------------------------
 
-        // Send message
         const textToSend = templates[decision.template_group]?.[decision.language] || templates['A']['en'];
-        
         await WazzupService.sendMessage(chatId, textToSend);
 
-        // Mark sent
         await prisma.followUp.create({
           data: {
             leadId,
@@ -135,31 +113,16 @@ export const followUpWorker = new Worker(
 
         await prisma.lead.update({ where: { id: leadId }, data: { status: 'FOLLOWUP_SENT' } });
       } else {
-        // Якщо AI вирішив не відправляти зараз (cancel або send_now + send_followup=false)
         await prisma.lead.update({ where: { id: leadId }, data: { status: 'WAITING_FOR_CLIENT' } });
-        
         await prisma.followUp.create({
-          data: {
-            leadId,
-            scheduledAt: new Date(),
-            status: 'cancelled',
-            aiReasonCode: decision.reason_code,
-          }
+          data: { leadId, scheduledAt: new Date(), status: 'cancelled', aiReasonCode: decision.reason_code }
         });
       }
     }
   },
   {
     connection: connection as any,
-    limiter: {
-      max: 10,
-      duration: 1000,
-    },
-    // Reliability
+    limiter: { max: 10, duration: 1000 },
     lockDuration: 30000,
   }
 );
-
-followUpWorker.on('failed', (job, err) => {
-  console.error(`Job ${job?.id} failed with error ${err.message}`);
-});
