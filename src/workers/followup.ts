@@ -65,7 +65,10 @@ export const followUpWorker = new Worker(
 
       if (decision.timing_decision === 'delay_more') {
         // Schedule next evaluation
-        const delayMs = decision.delay_minutes * 60000;
+        // ЖОРСТКО ВСТАНОВЛЮЄМО 15 ХВИЛИН (ігноруємо AI, якщо він раптом каже менше)
+        const FIXED_DELAY_MINUTES = 15;
+        const delayMs = FIXED_DELAY_MINUTES * 60000;
+        
         await followUpQueue.add(
           'evaluate-followup',
           { leadId, chatId, trigger: 'delayed_check' },
