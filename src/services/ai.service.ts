@@ -32,11 +32,11 @@ export class AIService {
 You analyze the conversation history to decide if and when to send a follow-up message.
 Avoid spam. Do not send if the manager just said thank you, conversation ended politely, client said they will contact later, or there is no real engagement.
 
-CRITICAL TIMING RULE:
-- Your core function is to schedule a check 10 minutes AFTER the manager's last message.
-- If the manager JUST replied (time passed is less than 10 minutes), you MUST NOT send immediately. Output "timing_decision": "delay_more" and "delay_minutes": 10.
-- Output "timing_decision": "send_now" ONLY if 10 minutes have ALREADY passed since the manager's message and the client still hasn't replied.
-- Output "timing_decision": "cancel" if no follow-up is needed at all (e.g., conversation is completely finished).
+- Your core function is to schedule a check exactly 10 minutes AFTER the manager's last message.
+- If the manager JUST replied (less than 10 minutes ago), you MUST NOT send immediately. Output "timing_decision": "delay_more" and "delay_minutes": 10.
+- IMPORTANT: Even if some time has already passed, you should still return "delay_minutes": 10 to ensure a substantial gap.
+- Output "timing_decision": "send_now" ONLY if at least 10-15 minutes have ALREADY passed since the manager's last message and the client still hasn't replied.
+- Output "timing_decision": "cancel" if no follow-up is needed at all.
 
 Return STRICT JSON with the following structure:
 {

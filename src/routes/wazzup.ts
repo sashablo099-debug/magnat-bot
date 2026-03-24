@@ -120,8 +120,12 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
             if (lead.status === 'FOLLOWUP_SENT') {
               fastify.log.info(`[LIMIT] Follow-up already sent for lead ${lead.id}. Rule: ONLY 1 REMINDER EVER.`);
             } else {
-              // Менеджер може уточнювати інфу, тому даємо йому 5 хвилин "тиші" перед тим,
-              // як AI почне думати про відправку фоллоу-апа. BullMQ проігнорує дублікати в межах 5 хв.
+              // Менеджер може уточнювати інфу, тому ми ОБНУЛЯЄМО таймер при кожному новому повідомленні.
+              // AI запрацює лише тоді, коли менеджер помовчить рівно 10 хвилин.
+              const jobId = `evaluate_debounce_${lead.id}`;
+              const job = await followUpQueue.getJob(jobId);
+              if (job) await job.remove(); // Видаляємо попереднє завдання, щоб почати відлік наново
+              
               await followUpQueue.add(
                 'evaluate-followup',
                 {
@@ -131,8 +135,8 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
                   timestamp: validDate
                 },
                 {
-                  jobId: `evaluate_debounce_${lead.id}_${Math.floor(Date.now() / (5 * 60000))}`,
-                  delay: 5 * 60000 // 5 хвилин затримки на "дописування"
+                  jobId,
+                  delay: 10 * 60000 
                 }
               );
             }
