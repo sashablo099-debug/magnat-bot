@@ -82,32 +82,24 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         if (!lead && senderType === 'client') {
           try {
             const bitrixData = await BitrixService.findLeadByInstagram(instagramUsername);
-            if (bitrixData) {
-              lead = await prisma.lead.create({
-                data: {
-                  id: String(bitrixData.id),
-                  chatId,
-                  status: bitrixData.statusId, // Will map to NEW/IN_PROCESS etc internal enum if needed. 
-                },
-              });
-            } else {
-              // Якщо Bitrix не знайшов ліда, створимо тимчасового локального
-              lead = await prisma.lead.create({
-                data: {
-                  id: `temp_${Date.now()}`,
-                  chatId,
-                  status: 'NEW',
-                },
-              });
+            if (!bitrixData || bitrixData.statusId !== 'NEW') {
+              fastify.log.info(`[CRM CHECK] Ignoring new user ${instagramUsername}. Bitrix status: ${bitrixData?.statusId || 'NOT_FOUND'}, expected 'NEW'.`);
+              continue; // Ігноруємо повідомлення, якщо лід не NEW або його немає в Bitrix
             }
+            lead = await prisma.lead.create({
+              data: {
+                id: String(bitrixData.id),
+                chatId,
+                status: bitrixData.statusId,
+              },
+            });
           } catch (e) {
-            fastify.log.error(e, 'Failed to fetch/create lead from Bitrix');
+            fastify.log.error(e, 'Failed to fetch Bitrix logic for new lead');
+            continue;
           }
         } else if (!lead && senderType === 'manager') {
-          // Create local if first message is somehow from manager
-          lead = await prisma.lead.create({
-            data: { id: `temp_${Date.now()}`, chatId, status: 'NEW' }
-          });
+          fastify.log.info(`Ignoring first message from manager to unknown lead ${instagramUsername}.`);
+          continue;
         }
 
         // 2. Save Message
@@ -128,9 +120,8 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
             if (lead.status === 'FOLLOWUP_SENT') {
               fastify.log.info(`[LIMIT] Follow-up already sent for lead ${lead.id}. Rule: ONLY 1 REMINDER EVER.`);
             } else {
-              // Щоб уникнути спаму AI, коли менеджер відправляє 5 повідомлень підряд за хвилину,
-              // ми даємо йому 60 секунд "дописати думку". BullMQ проігнорує дублікати, якщо 
-              // такий самий jobId вже "чекає" в черзі на обробку!
+              // Менеджер може уточнювати інфу, тому даємо йому 5 хвилин "тиші" перед тим,
+              // як AI почне думати про відправку фоллоу-апа. BullMQ проігнорує дублікати в межах 5 хв.
               await followUpQueue.add(
                 'evaluate-followup',
                 {
@@ -140,8 +131,8 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
                   timestamp: validDate
                 },
                 {
-                  jobId: `evaluate_debounce_${lead.id}_${Math.floor(Date.now() / 60000)}`,
-                  delay: 60000 // 1 хвилина затримки на "дописування"
+                  jobId: `evaluate_debounce_${lead.id}_${Math.floor(Date.now() / (5 * 60000))}`,
+                  delay: 5 * 60000 // 5 хвилин затримки на "дописування"
                 }
               );
             }
