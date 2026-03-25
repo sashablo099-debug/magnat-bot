@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma';
 import { followUpQueue } from '../config/queue';
 import { BitrixService } from '../services/bitrix.service';
 import { ConfigService } from '../services/config.service';
+import { BotLogger } from '../services/logger.service';
 
 export async function wazzupRoutes(fastify: FastifyInstance) {
   fastify.post('/', async (request, reply) => {
@@ -34,9 +35,12 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
           text.includes('з радістю надам') ||
           text.includes('happy to provide you with additional')
         );
-        if (isBotTemplate) continue;
+        if (isBotTemplate) {
+          await BotLogger.info('BOT_MSG_IGNORED', `Skipped own bot template message`, { chatId });
+          continue;
+        }
 
-        // Тестовий фільтр — тільки дозволені акаунти
+        // Тестовий фільтр
         const allowedUsernames = ['sanchiz.es', 'no_schoo1'];
         const instagramUsername = (author?.username || chatId || '').toString();
         const isAllowedUser = allowedUsernames.some(name => instagramUsername.includes(name));
@@ -45,7 +49,6 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         const isManager = msg.status !== 'inbound';
         const senderType = isManager ? 'manager' : 'client';
 
-        // Ідемпотентність — не обробляємо одне й те саме повідомлення двічі
         const existingMsg = await prisma.message.findUnique({ where: { id: messageId } });
         if (existingMsg) continue;
 
@@ -54,17 +57,20 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         if (!lead && senderType === 'client') {
           const bitrixData = await BitrixService.findLeadByInstagram(instagramUsername);
           if (!bitrixData || bitrixData.statusId !== 'NEW') {
-            fastify.log.info(`[CRM] Ignoring ${instagramUsername}: status=${bitrixData?.statusId || 'NOT_FOUND'}`);
+            await BotLogger.warn('CRM_BLOCKED', `Lead not created: Bitrix status is "${bitrixData?.statusId || 'NOT_FOUND'}", expected NEW`, {
+              chatId,
+              meta: { instagramUsername, bitrixStatus: bitrixData?.statusId }
+            });
             continue;
           }
           lead = await prisma.lead.create({
             data: { id: String(bitrixData.id), chatId, status: bitrixData.statusId }
           });
+          await BotLogger.info('LEAD_CREATED', `New lead created from CRM (status: NEW)`, { leadId: lead.id, chatId });
         } else if (!lead && senderType === 'manager') continue;
 
         if (!lead) continue;
 
-        // Зберігаємо повідомлення
         await prisma.message.create({
           data: {
             id: messageId,
@@ -77,33 +83,37 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         });
 
         if (senderType === 'client') {
-          // =====================================================
-          // КЛІЄНТ НАПИСАВ → СКАСОВУЄМО ВСІ ЗАПЛАНОВАНІ ЗАВДАННЯ
-          // =====================================================
-          // 1. Скасовуємо debounce-завдання (ще не запустився воркер)
+          // Скасовуємо всі заплановані завдання при відповіді клієнта
           const debounceJobId = `manual_debounce_${lead.id}`;
           const debounceJob = await followUpQueue.getJob(debounceJobId);
           if (debounceJob) {
             await debounceJob.remove();
-            fastify.log.info(`[CANCEL] Client replied — removed debounce job for lead ${lead.id}`);
+            await BotLogger.info('DEBOUNCE_CANCELLED', `Client replied — debounce timer removed`, { leadId: lead.id, chatId });
           }
 
-          // 2. Скасовуємо відкладені завдання воркера (delayed_check у черзі)
           const delayedJobs = await followUpQueue.getDelayed();
+          let cancelledCount = 0;
           for (const j of delayedJobs) {
             if (j.data?.leadId === lead.id) {
               await j.remove();
-              fastify.log.info(`[CANCEL] Client replied — removed delayed check job ${j.id} for lead ${lead.id}`);
+              cancelledCount++;
             }
           }
+          if (cancelledCount > 0) {
+            await BotLogger.info('QUEUE_CANCELLED', `Client replied — removed ${cancelledCount} delayed job(s) from queue`, { leadId: lead.id, chatId });
+          }
 
-          // 3. Позначаємо pending follow-ups як скасовані в БД
           await prisma.followUp.updateMany({
             where: { leadId: lead.id, status: 'pending' },
             data: { status: 'cancelled', aiReasonCode: 'CLIENT_REPLIED' }
           });
 
-          // 4. Оновлюємо статус ліда
+          await BotLogger.info('CLIENT_REPLIED', `Client sent a message: "${(text || '').slice(0, 80)}"`, {
+            leadId: lead.id,
+            chatId,
+            meta: { text: (text || '').slice(0, 200) }
+          });
+
           if (lead.status !== 'FOLLOWUP_SENT') {
             await prisma.lead.update({
               where: { id: lead.id },
@@ -112,15 +122,14 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
           }
 
         } else if (senderType === 'manager' && lead.status !== 'FOLLOWUP_SENT') {
-          // =====================================================
-          // МЕНЕДЖЕР НАПИСАВ → ЗАПУСКАЄМО/СКИДАЄМО ДЕБАУНС-ТАЙМЕР
-          // =====================================================
           const debounceMinutes = await ConfigService.getInt('manager_debounce_minutes', 15);
           const jobId = `manual_debounce_${lead.id}`;
           const job = await followUpQueue.getJob(jobId);
           if (job) {
             await job.remove();
-            fastify.log.info(`[DEBOUNCE] Reset timer for lead ${lead.id} to ${debounceMinutes} min`);
+            await BotLogger.info('DEBOUNCE_RESET', `Manager sent message — timer reset to ${debounceMinutes} min`, { leadId: lead.id, chatId });
+          } else {
+            await BotLogger.info('DEBOUNCE_START', `Manager sent message — starting ${debounceMinutes}-min silence timer`, { leadId: lead.id, chatId });
           }
 
           await followUpQueue.add(
@@ -131,7 +140,7 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         }
       }
     } catch (err: any) {
-      fastify.log.error(err, 'Crash in Wazzup webhook');
+      await BotLogger.error('WEBHOOK_CRASH', `Unhandled error in Wazzup webhook: ${err.message}`, { meta: { stack: err.stack?.slice(0, 300) } });
       return reply.status(500).send({ error: 'Internal Server Error' });
     }
     return reply.status(200).send({ status: 'ok' });

@@ -2,7 +2,7 @@ import { prisma } from '../config/prisma';
 
 export class ConfigService {
   static async get(key: string, defaultValue: string): Promise<string> {
-    const setting = await prisma.settings.findUnique({ where: { key } });
+    const setting = await (prisma as any).settings.findUnique({ where: { key } });
     return setting ? setting.value : defaultValue;
   }
 

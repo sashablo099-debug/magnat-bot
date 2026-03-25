@@ -46,3 +46,14 @@ model Settings {
   value String
 }
 
+model BotLog {
+  id        String   @id @default(uuid())
+  level     String   // 'info' | 'warn' | 'error' | 'decision'
+  leadId    String?
+  chatId    String?
+  event     String   // Short event name e.g. 'AI_DECISION', 'FOLLOWUP_SENT', 'CLIENT_REPLIED'
+  message   String   // Full human-readable message
+  meta      String?  // JSON string with extra context
+  createdAt DateTime @default(now())
+}
+

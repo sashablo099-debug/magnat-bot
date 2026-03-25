@@ -67,16 +67,37 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
 
   // SETTINGS API
   fastify.get('/settings', async () => {
-    return await prisma.settings.findMany();
+    return await (prisma as any).settings.findMany();
   });
 
   fastify.post('/settings', async (request) => {
     const { key, value } = request.body as { key: string; value: string };
-    return await prisma.settings.upsert({
+    return await (prisma as any).settings.upsert({
       where: { key },
       update: { value },
       create: { key, value }
     });
   });
+
+  // LOGS API
+  fastify.get('/logs', async (request) => {
+    const query = request.query as { level?: string; event?: string; limit?: string };
+    const limit = parseInt(query.limit || '100');
+    const where: any = {};
+    if (query.level) where.level = query.level;
+    if (query.event) where.event = query.event;
+
+    return await (prisma as any).botLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 500),
+    });
+  });
+
+  fastify.delete('/logs', async () => {
+    await (prisma as any).botLog.deleteMany({});
+    return { status: 'cleared' };
+  });
 }
+
 
