@@ -21,6 +21,16 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
       const { messages } = body;
       for (const msg of messages) {
         const { messageId, chatId, text, author } = msg;
+        
+        const isManager = msg.status !== 'inbound';
+        const senderType = isManager ? 'manager' : 'client';
+        const instagramUsername = (author?.username || chatId || '').toString();
+
+        // [LOG] ВХІДНИЙ СИГНАЛ (до будь-яких фільтрів)
+        await BotLogger.info('RAW_WEBHOOK', 
+          `@${instagramUsername} (${senderType}): "${(text || '').slice(0, 50)}"`,
+          { chatId, meta: { msg } }
+        );
 
         let validDate = new Date();
         if (msg.timestamp) validDate = new Date(msg.timestamp);
@@ -40,23 +50,16 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
           continue;
         }
 
-        const isManager = msg.status !== 'inbound';
-        const senderType = isManager ? 'manager' : 'client';
-
         // Тестовий фільтр
         const allowedUsernames = ['sanchiz.es', 'no_schoo1', 's.ageev'];
-        const instagramUsername = (author?.username || chatId || '').toString();
         const isAllowedUser = allowedUsernames.some(name => instagramUsername.includes(name));
 
-        // Логуємо ВСІ повідомлення — навіть ті що не проходять фільтр
-        await BotLogger.info('WEBHOOK_MSG', 
-          `[${isAllowedUser ? 'ALLOWED' : 'FILTERED OUT'}] @${instagramUsername} (${senderType}): "${(text || '').slice(0, 60)}"`,
-          { chatId, meta: { username: instagramUsername, sender: senderType, allowed: isAllowedUser } }
-        );
+        if (!isAllowedUser) {
+          await BotLogger.info('MSG_FILTERED', `@${instagramUsername} is not in allowed list. Skipping.`, { chatId });
+          continue;
+        }
 
-        if (!isAllowedUser) continue;
-
-        const existingMsg = await prisma.message.findUnique({ where: { id: messageId } });
+        const existingMsg = await (prisma as any).message.findUnique({ where: { id: messageId } });
         if (existingMsg) continue;
 
         let lead = await prisma.lead.findUnique({ where: { chatId } });
