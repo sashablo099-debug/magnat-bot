@@ -40,14 +40,21 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
           continue;
         }
 
+        const isManager = msg.status !== 'inbound';
+        const senderType = isManager ? 'manager' : 'client';
+
         // Тестовий фільтр
         const allowedUsernames = ['sanchiz.es', 'no_schoo1', 's.ageev'];
         const instagramUsername = (author?.username || chatId || '').toString();
         const isAllowedUser = allowedUsernames.some(name => instagramUsername.includes(name));
-        if (!isAllowedUser) continue;
 
-        const isManager = msg.status !== 'inbound';
-        const senderType = isManager ? 'manager' : 'client';
+        // Логуємо ВСІ повідомлення — навіть ті що не проходять фільтр
+        await BotLogger.info('WEBHOOK_MSG', 
+          `[${isAllowedUser ? 'ALLOWED' : 'FILTERED OUT'}] @${instagramUsername} (${senderType}): "${(text || '').slice(0, 60)}"`,
+          { chatId, meta: { username: instagramUsername, sender: senderType, allowed: isAllowedUser } }
+        );
+
+        if (!isAllowedUser) continue;
 
         const existingMsg = await prisma.message.findUnique({ where: { id: messageId } });
         if (existingMsg) continue;
