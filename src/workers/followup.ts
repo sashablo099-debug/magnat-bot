@@ -73,7 +73,7 @@ export const followUpWorker = new Worker(
       });
 
       if (decision.timing_decision === 'delay_more') {
-        const delayMinutes = await ConfigService.getInt('followup_delay_minutes', 15);
+        const delayMinutes = await ConfigService.getInt('followup_delay_minutes', 1440);
         const delayMs = delayMinutes * 60000;
 
         await followUpQueue.add(

@@ -51,7 +51,7 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         }
 
         // Тестовий фільтр
-        const allowedUsernames = ['sanchiz.es', 'no_schoo1', 's.ageev'];
+        const allowedUsernames = ['sanchiz.es', 'no_schoo1', 's.ageev', '_real_nowhere_man_'];
         const isAllowedUser = allowedUsernames.some(name => instagramUsername.includes(name));
 
         if (!isAllowedUser) {
