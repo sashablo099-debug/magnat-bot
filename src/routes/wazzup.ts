@@ -66,13 +66,27 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
 
         if (!lead && senderType === 'client') {
           const bitrixData = await BitrixService.findLeadByInstagram(instagramUsername);
-          if (!bitrixData || bitrixData.statusId !== 'NEW') {
-            await BotLogger.warn('CRM_BLOCKED', `Lead not created: Bitrix status is "${bitrixData?.statusId || 'NOT_FOUND'}", expected NEW`, {
-              chatId,
-              meta: { instagramUsername, bitrixStatus: bitrixData?.statusId }
+
+          if (!bitrixData) {
+            // Ліда ще немає в Bitrix — можливо не встиг додатись. Пробуємо ще раз через 60 сек.
+            await BotLogger.warn('CRM_RETRY', `Lead NOT_FOUND in Bitrix. Scheduling retry in 60s`, {
+              chatId, meta: { instagramUsername, messageId, text: (text || '').slice(0, 100), timestamp: validDate }
+            });
+            await followUpQueue.add(
+              'retry-lead-creation',
+              { chatId, instagramUsername, messageId, text: text || '', timestamp: validDate.toISOString() },
+              { delay: 60000, jobId: `retry_lead_${chatId}_${messageId}` }
+            );
+            continue;
+          }
+
+          if (bitrixData.statusId !== 'NEW') {
+            await BotLogger.warn('CRM_BLOCKED', `Lead not created: Bitrix status is "${bitrixData.statusId}", expected NEW`, {
+              chatId, meta: { instagramUsername, bitrixStatus: bitrixData.statusId }
             });
             continue;
           }
+
           lead = await prisma.lead.create({
             data: { id: String(bitrixData.id), chatId, status: bitrixData.statusId }
           });

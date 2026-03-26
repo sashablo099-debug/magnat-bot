@@ -24,6 +24,47 @@ const templates: Record<string, Record<string, string>> = {
 export const followUpWorker = new Worker(
   'followUpQueue',
   async (job: Job) => {
+    if (job.name === 'retry-lead-creation') {
+      const { chatId, instagramUsername, messageId, text, timestamp } = job.data;
+      
+      const bitrixData = await BitrixService.findLeadByInstagram(instagramUsername);
+      if (!bitrixData) {
+        await BotLogger.warn('CRM_RETRY_FAILED', `Lead still NOT_FOUND in Bitrix after 60s. Skipping.`, {
+          chatId, meta: { instagramUsername, messageId }
+        });
+        return;
+      }
+
+      const bitrixStatus = bitrixData.statusId;
+      if (bitrixStatus !== 'NEW' && bitrixStatus !== 'IN_PROCESS') {
+        await BotLogger.warn('CRM_RETRY_BLOCKED', `Lead found but status is "${bitrixStatus}". Skipping.`, {
+          chatId, meta: { instagramUsername, bitrixStatus }
+        });
+        return;
+      }
+
+      let lead = await prisma.lead.findUnique({ where: { chatId } });
+      if (!lead) {
+        lead = await prisma.lead.create({
+          data: { id: String(bitrixData.id), chatId, status: bitrixStatus }
+        });
+        await BotLogger.info('LEAD_CREATED_RETRY', `Lead finally found in CRM (status: ${bitrixStatus})`, { leadId: lead.id, chatId });
+      }
+
+      await prisma.message.create({
+        data: {
+          id: messageId,
+          chatId,
+          leadId: lead.id,
+          sender: 'client',
+          text: text || '',
+          timestamp: new Date(timestamp),
+        }
+      });
+      await BotLogger.info('RETRY_MSG_SAVED', `First message saved after CRM retry. Bot will now track this lead.`, { leadId: lead.id, chatId });
+      return;
+    }
+
     if (job.name === 'evaluate-followup') {
       const { leadId, chatId } = job.data;
 
