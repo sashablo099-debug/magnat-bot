@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+declare const __BUILD_TIME__: string;
 import { Search, AlertCircle, X, Trash2, Settings as SettingsIcon, Save, Activity, ChevronDown, RefreshCw } from 'lucide-react';
 import './index.css';
 
@@ -159,7 +160,12 @@ function App() {
               <span className="text-slate-900 font-bold text-sm">M</span>
             </div>
             <span className="font-bold text-white tracking-tight">Magnat Bot</span>
-            <span className="text-slate-500 text-xs font-mono">Control Center</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-800 rounded border border-slate-700">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-slate-400 text-[10px] font-mono">
+                build {new Date(__BUILD_TIME__).toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+              </span>
+            </div>
           </div>
           <nav className="flex gap-1">
             {(['followups', 'logs', 'settings'] as const).map(t => (
