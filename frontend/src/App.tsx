@@ -43,8 +43,15 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [logFilter, setLogFilter] = useState('all');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('magnat_auth') === 'true');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
   const [debounceVal, setDebounceVal] = useState('15');
   const [followupVal, setFollowupVal] = useState('15');
+  const [testModeVal, setTestModeVal] = useState('1');
   const [autoRefreshLogs, setAutoRefreshLogs] = useState(true);
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
   const logsBottomRef = useRef<HTMLDivElement>(null);
@@ -72,8 +79,10 @@ function App() {
       const data = await res.json();
       const deb = data.find((s: any) => s.key === 'manager_debounce_minutes');
       const fol = data.find((s: any) => s.key === 'followup_delay_minutes');
+      const test = data.find((s: any) => s.key === 'test_mode');
       if (deb) setDebounceVal(deb.value);
       if (fol) setFollowupVal(fol.value);
+      if (test) setTestModeVal(test.value);
     } catch (e) { console.error(e); }
   };
 
@@ -148,37 +157,83 @@ function App() {
     (f.aiReasonCode || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email === 'operations@magnatdiamonds.com' && password === 'SergyCOO2026') {
+      localStorage.setItem('magnat_auth', 'true');
+      setIsAuthenticated(true);
+    } else {
+      alert('Invalid credentials');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('magnat_auth');
+    setIsAuthenticated(false);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center font-sans text-white p-6">
+        <form onSubmit={handleLogin} className="bg-slate-900 border border-slate-800 p-8 rounded-2xl w-full max-w-sm flex flex-col gap-5 shadow-2xl">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow">
+              <span className="text-slate-900 font-bold text-lg">M</span>
+            </div>
+            <div>
+              <h1 className="font-bold text-xl tracking-tight">Magnat Bot</h1>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">Secure Dashboard</p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-white focus:ring-1 focus:ring-slate-500 transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-white focus:ring-1 focus:ring-slate-500 transition-colors" />
+          </div>
+          <button type="submit" className="w-full bg-white text-slate-900 font-bold py-3 mt-2 rounded-lg text-sm hover:bg-slate-200 transition-colors shadow">Login to Dashboard</button>
+        </form>
+      </div>
+    );
+  }
+
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white text-sm">Loading...</div>;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900 sticky top-0 z-40">
-        <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
-              <span className="text-slate-900 font-bold text-sm">M</span>
+      <header className="border-b border-slate-800 bg-slate-900 md:sticky top-0 z-40">
+        <div className="max-w-[1400px] mx-auto px-6 py-4 md:py-0 md:h-16 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0">
+          <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
+            <div className="flex items-center gap-4">
+              <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
+                <span className="text-slate-900 font-bold text-sm">M</span>
+              </div>
+              <span className="font-bold text-white tracking-tight">Magnat Bot</span>
+              <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 bg-slate-800 rounded border border-slate-700">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-slate-400 text-[10px] font-mono whitespace-nowrap">
+                  build {new Date(__BUILD_TIME__).toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                </span>
+              </div>
             </div>
-            <span className="font-bold text-white tracking-tight">Magnat Bot</span>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-800 rounded border border-slate-700">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="text-slate-400 text-[10px] font-mono">
-                build {new Date(__BUILD_TIME__).toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
-              </span>
-            </div>
+            <button onClick={handleLogout} className="md:hidden text-xs text-slate-500 hover:text-white border border-slate-700 px-3 py-1 rounded">Logout</button>
           </div>
-          <nav className="flex gap-1">
+          <nav className="flex gap-1 overflow-x-auto w-full md:w-auto no-scrollbar pb-1 md:pb-0 items-center">
             {(['followups', 'logs', 'settings'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded text-xs font-semibold uppercase tracking-wider transition-colors ${
+                className={`px-4 py-1.5 rounded text-xs font-semibold uppercase tracking-wider transition-colors whitespace-nowrap ${
                   tab === t ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
               >
                 {t === 'followups' ? 'Monitor' : t === 'logs' ? '⚡ Logs' : '⚙ Settings'}
               </button>
             ))}
+            <button onClick={handleLogout} className="hidden md:block ml-2 px-3 py-1.5 text-xs text-slate-500 hover:text-white border border-slate-700 hover:border-slate-500 rounded transition-colors whitespace-nowrap">Logout</button>
           </nav>
         </div>
       </header>
@@ -187,9 +242,9 @@ function App() {
 
         {/* ===================== FOLLOWUPS TAB ===================== */}
         {tab === 'followups' && (
-          <div className="flex gap-6 items-start">
-            <div className="flex-1">
-              <div className="mb-5 flex items-center justify-between">
+          <div className="flex flex-col xl:flex-row gap-6 items-start">
+            <div className="flex-1 w-full overflow-hidden">
+              <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0">
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input
@@ -206,8 +261,8 @@ function App() {
                 </div>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                <table className="w-full text-left text-sm">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-x-auto w-full">
+                <table className="w-full text-left text-sm whitespace-nowrap md:whitespace-normal">
                   <thead>
                     <tr className="border-b border-slate-800 text-slate-500 text-[11px] uppercase tracking-widest">
                       <th className="px-5 py-3 font-semibold">Target</th>
@@ -241,7 +296,10 @@ function App() {
                             {fu.status}
                           </span>
                         </td>
-                        <td className="px-5 py-4 text-slate-400 text-[13px]">{fu.aiReasonCode || '—'}</td>
+                        <td className="px-5 py-4 text-slate-400 text-[13px]">
+                          {fu.aiReasonCode || '—'}
+                          {fu.language && <span className="ml-2 px-1.5 py-0.5 bg-slate-800 rounded text-[10px] uppercase font-bold text-slate-300 border border-slate-700">{fu.language}</span>}
+                        </td>
                         <td className="px-5 py-4">
                           <span className="font-mono text-[13px] text-slate-300 tabular-nums">{getTimerText(fu.scheduledAt, fu.status)}</span>
                         </td>
@@ -261,7 +319,7 @@ function App() {
 
             {/* Chat panel */}
             {selectedChatId && (
-              <div className="w-[400px] sticky top-20 bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-[calc(100vh-120px)] overflow-hidden">
+              <div className="w-full xl:w-[400px] xl:sticky top-20 bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-[60vh] xl:h-[calc(100vh-120px)] overflow-hidden mt-6 xl:mt-0">
                 <div className="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                   <div>
                     <div className="font-bold text-white text-sm">@{selectedChatId}</div>
@@ -299,7 +357,7 @@ function App() {
               </div>
               <div className="flex items-center gap-3">
                 {/* Level filter */}
-                <div className="flex gap-1">
+                <div className="hidden sm:flex gap-1">
                   {['all', 'info', 'warn', 'error', 'decision'].map(l => (
                     <button
                       key={l}
@@ -401,41 +459,49 @@ function App() {
             <div className="flex flex-col gap-5">
               {[
                 {
+                  key: 'test_mode',
+                  label: 'Test Mode (Bot Status)',
+                  value: testModeVal,
+                  set: setTestModeVal,
+                  desc: 'If ON (1), bot ONLY replies to allowed test users (sanchiz.es, s.ageev, etc). If OFF (0), bot processes ALL Instagram messages.',
+                  suffix: ''
+                },
+                {
                   key: 'manager_debounce_minutes',
                   label: 'Manager Silence Window',
                   value: debounceVal,
                   set: setDebounceVal,
-                  desc: 'Minutes of silence after manager\'s last message before AI starts evaluating. Resets on every new manager message.'
+                  desc: 'Minutes of silence after manager\'s last message before AI starts evaluating. Resets on every new manager message.',
+                  suffix: 'min'
                 },
                 {
                   key: 'followup_delay_minutes',
                   label: 'AI Follow-up Delay',
                   value: followupVal,
                   set: setFollowupVal,
-                  desc: 'Minutes the AI waits before sending the follow-up message after deciding to send.'
+                  desc: 'Minutes the AI waits before sending the follow-up message after deciding to send.',
+                  suffix: 'min'
                 }
               ].map(s => (
-                <div key={s.key} className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                  <div className="flex items-start justify-between gap-6">
-                    <div className="flex-1">
-                      <div className="font-semibold text-white mb-1">{s.label}</div>
-                      <div className="text-slate-500 text-sm leading-relaxed">{s.desc}</div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <input
-                        type="number"
-                        value={s.value}
-                        onChange={e => s.set(e.target.value)}
-                        className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-center font-mono text-lg focus:outline-none focus:ring-1 focus:ring-slate-500"
-                      />
-                      <span className="text-slate-500 text-sm">min</span>
-                      <button
-                        onClick={() => saveSetting(s.key, s.value)}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-white text-slate-900 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors"
-                      >
-                        <Save className="w-3.5 h-3.5" /> Save
-                      </button>
-                    </div>
+                <div key={s.key} className="bg-slate-900 border border-slate-800 rounded-xl p-5 md:p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4 md:gap-6">
+                  <div className="flex-1">
+                    <div className="font-semibold text-white mb-1">{s.label}</div>
+                    <div className="text-slate-500 text-sm leading-relaxed">{s.desc}</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <input
+                      type="number"
+                      value={s.value}
+                      onChange={e => s.set(e.target.value)}
+                      className="w-16 md:w-20 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-center font-mono text-base md:text-lg focus:outline-none focus:ring-1 focus:ring-slate-500"
+                    />
+                    {s.suffix && <span className="text-slate-500 text-sm w-6">{s.suffix}</span>}
+                    <button
+                      onClick={() => saveSetting(s.key, s.value)}
+                      className="flex items-center gap-1.5 px-3 md:px-4 py-2 bg-white text-slate-900 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors whitespace-nowrap"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Save
+                    </button>
                   </div>
                 </div>
               ))}
@@ -447,7 +513,7 @@ function App() {
       {/* Chat Panel Overlay for logs tab too */}
       {selectedChatId && tab !== 'followups' && (
         <div className="fixed inset-0 bg-black/60 z-50 flex justify-end" onClick={() => setSelectedChatId(null)}>
-          <div className="w-96 bg-slate-900 h-full border-l border-slate-800" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm md:w-96 bg-slate-900 h-full border-l border-slate-800 transition-transform" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-slate-800 flex justify-between">
               <span className="font-bold text-white">@{selectedChatId}</span>
               <button onClick={() => setSelectedChatId(null)}><X className="w-4 h-4 text-slate-400" /></button>

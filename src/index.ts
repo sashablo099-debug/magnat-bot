@@ -68,6 +68,13 @@ async function seedDefaultSettings() {
   } else {
     console.log(`[SEED] followup_delay kept as-is: ${followupSetting.value}min`);
   }
+
+  // test_mode: default to 1 (true)
+  await (prisma as any).settings.upsert({
+    where:  { key: 'test_mode' },
+    update: {},
+    create: { key: 'test_mode', value: '1' },
+  });
 }
 
 const start = async () => {
