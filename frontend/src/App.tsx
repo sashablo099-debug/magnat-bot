@@ -119,7 +119,7 @@ function App() {
     if (tab === 'logs') {
       setTimeout(() => logsBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
-  }, [logs, tab]);
+  }, [tab]);
 
   const fetchMessages = async (chatId: string) => {
     setSelectedChatId(chatId);
