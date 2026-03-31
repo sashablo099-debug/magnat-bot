@@ -20,8 +20,13 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
     try {
       const { messages } = body;
       for (const msg of messages) {
-        const { messageId, chatId, text, author } = msg;
+        const { messageId, chatId, text, author, chatType } = msg;
         
+        // Фільтр: обробляємо тільки повідомлення з Instagram
+        if (chatType !== 'instagram') {
+          continue;
+        }
+
         const isManager = msg.status !== 'inbound';
         const senderType = isManager ? 'manager' : 'client';
         const instagramUsername = (author?.username || chatId || '').toString();
@@ -51,10 +56,11 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         }
 
         // Тестовий фільтр
+        const isTestMode = await ConfigService.getInt('test_mode', 1) === 1;
         const allowedUsernames = ['sanchiz.es', 'no_schoo1', 's.ageev', '_real_nowhere_man_'];
         const isAllowedUser = allowedUsernames.some(name => instagramUsername.includes(name));
 
-        if (!isAllowedUser) {
+        if (isTestMode && !isAllowedUser) {
           await BotLogger.info('MSG_FILTERED', `@${instagramUsername} is not in allowed list. Skipping.`, { chatId });
           continue;
         }
