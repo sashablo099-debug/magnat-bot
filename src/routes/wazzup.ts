@@ -93,10 +93,13 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
             continue;
           }
 
-          lead = await prisma.lead.create({
-            data: { id: String(bitrixData.id), chatId, status: bitrixData.statusId }
+          // Використовуємо upsert для захисту від race conditions (одночасних повідомлень)
+          lead = await prisma.lead.upsert({
+            where: { chatId },
+            update: { status: bitrixData.statusId },
+            create: { id: String(bitrixData.id), chatId, status: bitrixData.statusId }
           });
-          await BotLogger.info('LEAD_CREATED', `New lead created from CRM (status: NEW)`, { leadId: lead.id, chatId });
+          await BotLogger.info('LEAD_CREATED', `New lead created/updated from CRM (status: NEW)`, { leadId: lead.id, chatId });
         } else if (!lead && senderType === 'manager') continue;
 
         if (!lead) continue;
@@ -113,24 +116,20 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
         });
 
         if (senderType === 'client') {
-          // Скасовуємо всі заплановані завдання при відповіді клієнта
+          // Скасовуємо всі заплановані завдання при відповіді клієнта О(1) замість О(N)
           const debounceJobId = `manual_debounce_${lead.id}`;
+          const delayedJobId = `delayed_24h_${lead.id}`;
+
           const debounceJob = await followUpQueue.getJob(debounceJobId);
           if (debounceJob) {
             await debounceJob.remove();
             await BotLogger.info('DEBOUNCE_CANCELLED', `Client replied — debounce timer removed`, { leadId: lead.id, chatId });
           }
 
-          const delayedJobs = await followUpQueue.getDelayed();
-          let cancelledCount = 0;
-          for (const j of delayedJobs) {
-            if (j.data?.leadId === lead.id) {
-              await j.remove();
-              cancelledCount++;
-            }
-          }
-          if (cancelledCount > 0) {
-            await BotLogger.info('QUEUE_CANCELLED', `Client replied — removed ${cancelledCount} delayed job(s) from queue`, { leadId: lead.id, chatId });
+          const delayedJob = await followUpQueue.getJob(delayedJobId);
+          if (delayedJob) {
+            await delayedJob.remove();
+            await BotLogger.info('QUEUE_CANCELLED', `Client replied — removed 24h delayed job from queue`, { leadId: lead.id, chatId });
           }
 
           await prisma.followUp.updateMany({

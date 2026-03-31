@@ -120,7 +120,7 @@ export const followUpWorker = new Worker(
         await followUpQueue.add(
           'evaluate-followup',
           { leadId, chatId, trigger: 'delayed_check' },
-          { delay: delayMs }
+          { delay: delayMs, jobId: `delayed_24h_${leadId}` }
         );
 
         await prisma.followUp.create({
@@ -138,6 +138,15 @@ export const followUpWorker = new Worker(
         await BotLogger.info('FOLLOWUP_SCHEDULED', `Followup queued in ${delayMinutes} min (reason: ${decision.reason_code})`, { leadId, chatId });
 
       } else if (decision.timing_decision === 'send_now' && decision.send_followup) {
+        // [SWISS WATCH GUARD]: Провіряємо чи клієнт не відповів, поки AI "думав" (5-10 сек)
+        const freshLead = await prisma.lead.findUnique({ where: { id: leadId } });
+        if (freshLead?.status === 'WAITING_FOR_CLIENT') {
+          await BotLogger.warn('RACE_CONDITION_PREVENTED', `Client replied while AI was evaluating. Aborting send_now.`, { leadId, chatId });
+          await prisma.followUp.create({
+            data: { leadId, scheduledAt: new Date(), status: 'cancelled', aiReasonCode: 'CLIENT_REPLIED_DURING_AI' }
+          });
+          return;
+        }
 
         // ФІНАЛЬНИЙ ЗАХИСТ: Перевірка статусу IN_PROCESS в Bitrix CRM
         const bitrixLead = await BitrixService.findLeadByInstagram(chatId);
