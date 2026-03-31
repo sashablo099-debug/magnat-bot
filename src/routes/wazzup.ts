@@ -38,7 +38,7 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
 
         // Ігноруємо власні повідомлення бота
         const isBotTemplate = text && (
-          text.includes('Вам актуален вопрос по украшениям') ||
+          text.includes('Вам актуален вопрос относительно украшений') ||
           text.includes('Вам актуальне питання щодо прикрас') ||
           text.includes('still interested in jewelry') ||
           text.includes('с радостью предоставлю') ||

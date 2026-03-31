@@ -10,7 +10,7 @@ import { BotLogger } from '../services/logger.service';
 
 const templates: Record<string, Record<string, string>> = {
   A: {
-    ru: "Здравствуйте. Скажите, пожалуйста, Вам актуален вопрос по украшениям?",
+    ru: "Здравствуйте. Скажите, пожалуйста, Вам актуален вопрос относительно украшений?",
     ua: "Вітаю. Скажіть, будь ласка, Вам актуальне питання щодо прикрас?",
     en: "Hello. Kindly advise if you are still interested in jewelry.",
   },
