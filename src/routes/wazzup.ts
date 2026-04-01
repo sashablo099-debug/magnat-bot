@@ -20,10 +20,20 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
     try {
       const { messages } = body;
       for (const msg of messages) {
-        const { messageId, chatId, text, author, chatType } = msg;
-        
+        const { messageId, chatId, text, author, chatType, channelId } = msg;
+
         // Фільтр: обробляємо тільки повідомлення з Instagram
         if (chatType !== 'instagram') {
+           continue;
+        }
+
+        // Фільтр: ігноруємо вказаний технічний channelId
+        if (channelId === '3d60f5ef-fd19-4084-8545-cf7a950aac6e') {
+           continue;
+        }
+
+        // Фільтр: ігноруємо коментарі під постами та рілсами
+        if (msg.instPost) {
           continue;
         }
 
