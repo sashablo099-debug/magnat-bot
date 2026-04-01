@@ -38,10 +38,12 @@ The chat history is chronological (oldest first, newest last).
 The client has NOT responded yet.
 → Ask: Is the manager's last message a real question, offer, or invitation? (e.g. "When can you visit?", "Shall I send you options?", "Чекатиму зворотній зв'язок", "Какие варианты?")
   If YES (Manager asked a question or made an offer):
-    - If timePassedMinutes < 1000 → Decide: send_followup: true, timing_decision: "delay_more", delay_minutes: 1440, reason_code: "VALID_FOLLOWUP"
-    - If timePassedMinutes >= 1000 → Decide: send_followup: true, timing_decision: "send_now", reason_code: "VALID_FOLLOWUP", template_group: "B"
+    - If timePassedMinutes < 1000: You MUST delay!
+      Output: {"send_followup": false, "timing_decision": "delay_more", "delay_minutes": 1440, "reason_code": "VALID_FOLLOWUP"}
+    - If timePassedMinutes >= 1000: You MUST send!
+      Output: {"send_followup": true, "timing_decision": "send_now", "reason_code": "VALID_FOLLOWUP", "template_group": "B"}
   If NO (just "ok", "yes", "👍", or manager said "Goodbye"):
-    - Decide: send_followup: false, timing_decision: "cancel", reason_code: "NO_QUESTION"
+    - Output: {"send_followup": false, "timing_decision": "cancel", "reason_code": "NO_QUESTION"}
 
 === STEP 3: If CLIENT sent last message ===
 Analyze the CONTENT and INTENT of the client's last message carefully:
