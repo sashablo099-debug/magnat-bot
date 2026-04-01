@@ -36,10 +36,12 @@ The chat history is chronological (oldest first, newest last).
 
 === STEP 2: If MANAGER sent last message ===
 The client has NOT responded yet.
-→ Ask: Is the manager's last message a real question, offer, or invitation? (e.g. "When can you visit?", "Shall I send you options?")
-  YES + 15+ min passed → send_now, VALID_FOLLOWUP, Template B
-  YES + less than 15 min → delay_more
-  NO (just "ok", "yes", "👍") → cancel, NO_QUESTION
+→ Ask: Is the manager's last message a real question, offer, or invitation? (e.g. "When can you visit?", "Shall I send you options?", "Чекатиму зворотній зв'язок")
+  If YES:
+    - If passed time represents the 15-minute debounce (e.g. timePassedMinutes < 1000) → It's too fast for high jewelry! Decide: delay_more, delay_minutes: 1440
+    - If passed time is ~24 hours (e.g. timePassedMinutes >= 1000) → Client has been quiet for a day. Decide: send_now, VALID_FOLLOWUP, Template B
+  If NO (just "ok", "yes", "👍", or manager said "Goodbye"):
+    - cancel, NO_QUESTION
 
 === STEP 3: If CLIENT sent last message ===
 Analyze the CONTENT and INTENT of the client's last message carefully:
@@ -69,9 +71,9 @@ GROUP 3 — CLIENT ASKED A QUESTION (do NOT send, wait for manager):
   → cancel, reason: CLIENT_ACTIVE (manager needs to reply first)
 
 === TIMING ===
-- Less than 15 min since last relevant message → delay_more, delay_minutes: 15
-- 15+ min passed → send_now (if warranted)
-- No follow-up needed → cancel
+- Less than ~24 hours passed (e.g. timePassedMinutes < 1000) AND a follow-up is warranted → delay_more (wait 24 hours), delay_minutes: 1440
+- ~24+ hours passed (e.g. timePassedMinutes >= 1000) AND a follow-up is warranted → send_now
+- No follow-up needed or conversation naturally ended → cancel
 
 === TEMPLATE ===
 A = cold lead, minimal engagement
