@@ -171,6 +171,13 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
           }
 
         } else if (senderType === 'manager' && lead.status !== 'FOLLOWUP_SENT') {
+          
+          if (lead.status === 'WAITING_FOR_CLIENT') {
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: { status: 'IN_PROCESS' }
+            });
+          }
           const debounceMinutes = await ConfigService.getInt('manager_debounce_minutes', 15);
           const jobId = `manual_debounce_${lead.id}`;
           const job = await followUpQueue.getJob(jobId);
