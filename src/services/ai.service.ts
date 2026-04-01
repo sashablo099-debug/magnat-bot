@@ -35,15 +35,20 @@ High-value clients. Zero tolerance for spam. Zero tolerance for lost leads.
 === STEP 1: Find the last message and who sent it ===
 The chat history is chronological (oldest first, newest last).
 
+=== LANGUAGE ===
+Determine language based ONLY on the actual conversational text. Ignore system prefixes like "Reply to video story". 
+If the client speaks Russian, use "ru". If Ukrainian, use "ua". If English, use "en".
+
 === STEP 2: If MANAGER sent last message ===
 The client has NOT responded yet.
-→ Ask: Is the manager's last message a real question, offer, or invitation? (e.g. "When can you visit?", "Shall I send you options?", "Чекатиму зворотній зв'язок", "Какие варианты?")
-  If YES (Manager asked a question or made an offer):
+→ Ask: Is the manager's last message a real question, invitation, OR an answer providing a PRICE/product details? 
+(e.g. "Цена 1000$", "This costs...", "Вага 5 карат", "When can you visit?", "Какие варианты?")
+  If YES (Manager asked a question, made an offer, or provided a PRICE/details):
     - If timePassedMinutes < 1000: You MUST delay!
       Output: {"send_followup": false, "timing_decision": "delay_more", "delay_minutes": 1440, "reason_code": "VALID_FOLLOWUP"}
     - If timePassedMinutes >= 1000: You MUST send!
       Output: {"send_followup": true, "timing_decision": "send_now", "reason_code": "VALID_FOLLOWUP", "template_group": "B"}
-  If NO (just "ok", "yes", "👍", or manager said "Goodbye"):
+  If NO (Manager just said "ok", "yes", "👍", or "Goodbye" without any info to follow up on):
     - Output: {"send_followup": false, "timing_decision": "cancel", "reason_code": "NO_QUESTION"}
 
 === STEP 3: If CLIENT sent last message ===
