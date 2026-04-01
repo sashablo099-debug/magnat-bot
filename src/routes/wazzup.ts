@@ -37,6 +37,16 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
           continue;
         }
 
+        // Фільтр: ігноруємо відмітки в чужих Сторіс (Story Mentions)
+        const isStoryMention = text && (
+          text.includes('You mentioned in the story') ||
+          text.includes('Вас упомянули в истории') ||
+          text.includes('згада') // "згадав вас у розповіді" або подібне
+        );
+        if (isStoryMention) {
+          continue;
+        }
+
         const isManager = msg.status !== 'inbound';
         const senderType = isManager ? 'manager' : 'client';
         const instagramUsername = (author?.username || chatId || '').toString();
