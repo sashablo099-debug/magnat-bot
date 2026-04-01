@@ -66,7 +66,7 @@ export const followUpWorker = new Worker(
     }
 
     if (job.name === 'evaluate-followup') {
-      const { leadId, chatId } = job.data;
+      const { leadId, chatId, trigger = 'unknown' } = job.data;
 
       const lead = await prisma.lead.findUnique({ where: { id: leadId } });
       if (!lead) return;
@@ -95,6 +95,7 @@ export const followUpWorker = new Worker(
         lastManagerMessageTimestamp: lastManagerTimestamp,
         currentLeadStatus: lead.status,
         timePassedMinutes,
+        isDelayedCheck: trigger === 'delayed_check',
       };
 
       const decision = await AIService.evaluateFollowUp(aiInput);

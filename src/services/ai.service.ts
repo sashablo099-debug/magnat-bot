@@ -8,6 +8,7 @@ export interface AIDecisionInput {
   lastManagerMessageTimestamp: Date;
   currentLeadStatus: string;
   timePassedMinutes: number;
+  isDelayedCheck: boolean;
 }
 
 export interface AIDecisionOutput {
@@ -44,9 +45,9 @@ The client has NOT responded yet.
 → Ask: Is the manager's last message a real question, invitation, OR an answer providing a PRICE/product details? 
 (e.g. "Цена 1000$", "This costs...", "Вага 5 карат", "When can you visit?", "Какие варианты?")
   If YES (Manager asked a question, made an offer, or provided a PRICE/details):
-    - If timePassedMinutes < 1000: You MUST delay!
+    - If "isDelayedCheck" is FALSE (this is the first evaluation after manager typed): You MUST delay!
       Output: {"send_followup": false, "timing_decision": "delay_more", "delay_minutes": 1440, "reason_code": "VALID_FOLLOWUP"}
-    - If timePassedMinutes >= 1000: You MUST send!
+    - If "isDelayedCheck" is TRUE (time has already passed, we are waking up): You MUST send!
       Output: {"send_followup": true, "timing_decision": "send_now", "reason_code": "VALID_FOLLOWUP", "template_group": "B"}
   If NO (Manager just said "ok", "yes", "👍", or "Goodbye" without any info to follow up on):
     - Output: {"send_followup": false, "timing_decision": "cancel", "reason_code": "NO_QUESTION"}
@@ -62,7 +63,7 @@ GROUP 1 — WARM / UNDECIDED (client is still in the game, needs a nudge):
   • "Могу ли я прийти", "Can I come" — intent to visit without confirming time
   • "Напишу позже", "I'll write later"
   → These are WARM LEADS. Schedule follow-up for later.
-  → But ONLY if enough time has passed since that message (15+ min)
+  → But ONLY if "isDelayedCheck" is TRUE (otherwise delay_more)
   → send_followup: true, timing_decision: "send_now" or "delay_more", reason: CLIENT_STILL_DECIDING, Template B
 
 GROUP 2 — CLEAR REJECTION (do NOT send):
@@ -79,8 +80,8 @@ GROUP 3 — CLIENT ASKED A QUESTION (do NOT send, wait for manager):
   → cancel, reason: CLIENT_ACTIVE (manager needs to reply first)
 
 === TIMING ===
-- Less than ~24 hours passed (e.g. timePassedMinutes < 1000) AND a follow-up is warranted → delay_more (wait 24 hours), delay_minutes: 1440
-- ~24+ hours passed (e.g. timePassedMinutes >= 1000) AND a follow-up is warranted → send_now
+- If "isDelayedCheck" is FALSE AND a follow-up is warranted → delay_more (wait time), delay_minutes: 1440
+- If "isDelayedCheck" is TRUE AND a follow-up is warranted → send_now
 - No follow-up needed or conversation naturally ended → cancel
 
 === TEMPLATE ===
@@ -107,15 +108,16 @@ Return STRICT JSON:
 
 Context:
 - Minutes since manager's last message: ${input.timePassedMinutes}
+- isDelayedCheck: ${input.isDelayedCheck}
 - ${lastMsgInfo}
 
 Full Chat (chronological, oldest→newest):
 ${historyText}
 
-KEY: Who sent the LAST message above? If CLIENT → cancel. If MANAGER (and client hasn't responded, and it's been 15+ min) → consider sending.`;
+KEY: Who sent the LAST message above? If CLIENT → cancel. If MANAGER (and client hasn't responded) → consider sending.`;
 
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5.4-mini',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
