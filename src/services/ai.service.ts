@@ -11,8 +11,9 @@ export interface AIDecisionInput {
 }
 
 export interface AIDecisionOutput {
+  thought_process: string;
   send_followup: boolean;
-  reason_code: 'GREETING_ONLY' | 'NO_QUESTION' | 'CLIENT_CLOSED' | 'VALID_FOLLOWUP' | 'NO_ENGAGEMENT' | 'CLIENT_STILL_DECIDING' | 'CLIENT_REJECTED';
+  reason_code: 'GREETING_ONLY' | 'NO_QUESTION' | 'CLIENT_CLOSED' | 'VALID_FOLLOWUP' | 'NO_ENGAGEMENT' | 'CLIENT_STILL_DECIDING' | 'CLIENT_REJECTED' | 'CLIENT_ACTIVE';
   waiting_for_client: boolean;
   language: 'ru' | 'ua' | 'en';
   engagement_level: 'low' | 'medium' | 'high';
@@ -83,6 +84,7 @@ B = warm lead, showed real interest
 
 Return STRICT JSON:
 {
+  "thought_process": "Explain your sequential reasoning step-by-step before deciding.",
   "send_followup": true/false,
   "reason_code": "GREETING_ONLY" | "NO_QUESTION" | "CLIENT_CLOSED" | "VALID_FOLLOWUP" | "NO_ENGAGEMENT" | "CLIENT_STILL_DECIDING" | "CLIENT_REJECTED" | "CLIENT_ACTIVE",
   "waiting_for_client": true/false,
@@ -121,6 +123,7 @@ KEY: Who sent the LAST message above? If CLIENT → cancel. If MANAGER (and clie
       if (!content) return null;
 
       const result = JSON.parse(content) as AIDecisionOutput;
+      console.log(`[AI THOUGHT] ${result.thought_process}`);
       console.log(`[AI] reason=${result.reason_code}, timing=${result.timing_decision}, send=${result.send_followup}, lang=${result.language}`);
       return result;
     } catch (error) {
