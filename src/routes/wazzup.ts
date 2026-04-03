@@ -188,6 +188,14 @@ export async function wazzupRoutes(fastify: FastifyInstance) {
             await BotLogger.info('DEBOUNCE_START', `Manager sent message — starting ${debounceMinutes}-min silence timer`, { leadId: lead.id, chatId });
           }
 
+          // Також видаляємо старий 24-годинний таймер, якщо менеджер написав нове повідомлення
+          const delayedJobId = `delayed_24h_${lead.id}`;
+          const delayedJob = await followUpQueue.getJob(delayedJobId);
+          if (delayedJob) {
+            await delayedJob.remove();
+            await BotLogger.info('QUEUE_RESET', `Manager sent new message — old 24h delayed job removed`, { leadId: lead.id, chatId });
+          }
+
           await followUpQueue.add(
             'evaluate-followup',
             { leadId: lead.id, chatId: lead.chatId, trigger: 'manager_message', timestamp: validDate },

@@ -117,11 +117,17 @@ export const followUpWorker = new Worker(
       if (decision.timing_decision === 'delay_more') {
         const delayMinutes = await ConfigService.getInt('followup_delay_minutes', 1440);
         const delayMs = delayMinutes * 60000;
+        const jobId = `delayed_24h_${leadId}`;
+
+        const existingJob = await followUpQueue.getJob(jobId);
+        if (existingJob) {
+          await existingJob.remove();
+        }
 
         await followUpQueue.add(
           'evaluate-followup',
           { leadId, chatId, trigger: 'delayed_check' },
-          { delay: delayMs, jobId: `delayed_24h_${leadId}` }
+          { delay: delayMs, jobId }
         );
 
         await prisma.followUp.create({
